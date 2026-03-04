@@ -1,0 +1,236 @@
+openapi: 3.0.3
+info:
+  title: SoC Exploration Contract
+  version: 1.0.0
+  description: Contract for requirement intake, exploration execution, catalog updates, and report export.
+servers:
+  - url: https://internal.platform-architect.local
+paths:
+  /v1/explorations:
+    post:
+      summary: Create and run an exploration
+      operationId: createExploration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExplorationRequest'
+      responses:
+        '201':
+          description: Exploration completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExplorationResult'
+        '422':
+          description: Constraints unsatisfied or no valid candidate
+  /v1/explorations/{explorationId}:
+    get:
+      summary: Fetch exploration result snapshot
+      operationId: getExploration
+      parameters:
+        - in: path
+          name: explorationId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Snapshot fetched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultSnapshot'
+  /v1/catalog/items/{ipItemId}:
+    put:
+      summary: Update IP catalog item (conflict-aware)
+      operationId: updateCatalogItem
+      parameters:
+        - in: path
+          name: ipItemId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogUpdateRequest'
+      responses:
+        '200':
+          description: Updated
+        '409':
+          description: Version conflict, manual merge required
+  /v1/reports:
+    post:
+      summary: Export proposal report
+      operationId: exportReport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportExportRequest'
+      responses:
+        '201':
+          description: Report generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportExportResponse'
+components:
+  schemas:
+    ExplorationRequest:
+      type: object
+      required:
+        - segment
+        - processNode
+        - powerBudgetW
+        - areaBudgetMm2
+        - memoryConfig
+        - workloadModel
+      properties:
+        segment:
+          type: string
+          enum: [MEMORY, MOBILE, PHYSICAL_AI]
+        processNode:
+          type: string
+        powerBudgetW:
+          type: number
+          exclusiveMinimum: 0
+        areaBudgetMm2:
+          type: number
+          exclusiveMinimum: 0
+        memoryConfig:
+          type: object
+        workloadModel:
+          type: object
+    ExplorationResult:
+      type: object
+      required:
+        - explorationId
+        - status
+        - topCandidates
+        - candidateCount
+      properties:
+        explorationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [SUCCESS, UNSATISFIABLE, FAILED]
+        retryCount:
+          type: integer
+          minimum: 0
+          maximum: 3
+        failureCode:
+          type: string
+          nullable: true
+        candidateCount:
+          type: integer
+          minimum: 0
+          maximum: 200
+        topCandidates:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/CandidateSummary'
+    CandidateSummary:
+      type: object
+      required:
+        - candidateId
+        - rank
+        - performanceScore
+        - powerW
+        - areaMm2
+      properties:
+        candidateId:
+          type: string
+          format: uuid
+        rank:
+          type: integer
+          minimum: 1
+        performanceScore:
+          type: number
+        powerW:
+          type: number
+        areaMm2:
+          type: number
+        paretoClass:
+          type: string
+          enum: [NON_DOMINATED, DOMINATED]
+    ResultSnapshot:
+      type: object
+      required:
+        - explorationId
+        - inputHash
+        - ppaModelVersion
+        - ruleSetVersion
+        - catalogVersion
+        - candidateDigest
+      properties:
+        explorationId:
+          type: string
+          format: uuid
+        inputHash:
+          type: string
+        ppaModelVersion:
+          type: string
+        ruleSetVersion:
+          type: string
+        catalogVersion:
+          type: string
+        candidateDigest:
+          type: string
+    CatalogUpdateRequest:
+      type: object
+      required:
+        - expectedVersion
+        - payload
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 1
+        payload:
+          type: object
+    ReportExportRequest:
+      type: object
+      required:
+        - explorationId
+        - format
+      properties:
+        explorationId:
+          type: string
+          format: uuid
+        format:
+          type: string
+          enum: [PDF, JSON]
+    ReportExportResponse:
+      type: object
+      required:
+        - reportId
+        - explorationId
+        - format
+        - topCandidates
+      properties:
+        reportId:
+          type: string
+          format: uuid
+        explorationId:
+          type: string
+          format: uuid
+        format:
+          type: string
+          enum: [PDF, JSON]
+        topCandidates:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items:
+            type: string
+            format: uuid
